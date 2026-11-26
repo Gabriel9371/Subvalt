@@ -1,9 +1,14 @@
 import type {
   Assinatura,
   AssinaturaInput,
+  ConfirmarPagamentoInput,
   Midia,
   MidiaInput,
+  Pagamento,
+  RegistrarPagamentoInput,
+  ResumoPagamentoAssinatura,
   ResumoAssinaturas,
+  StatusPagamento,
   StatusMidia,
 } from './types'
 
@@ -83,6 +88,26 @@ export const api = {
     request<Assinatura>(`/api/assinaturas/${id}/cancelar`, jsonInit('PATCH')),
   reativarAssinatura: (id: number) =>
     request<Assinatura>(`/api/assinaturas/${id}/reativar`, jsonInit('PATCH')),
+  resumosPagamentosAssinaturas: () =>
+    request<ResumoPagamentoAssinatura[]>('/api/pagamentos/resumo-assinaturas'),
+  listarPagamentos: (filters: {
+    inicio?: string
+    fim?: string
+    assinaturaId?: number
+    status?: StatusPagamento
+  } = {}) => {
+    const params = new URLSearchParams()
+    if (filters.inicio) params.set('inicio', filters.inicio)
+    if (filters.fim) params.set('fim', filters.fim)
+    if (filters.assinaturaId) params.set('assinaturaId', String(filters.assinaturaId))
+    if (filters.status) params.set('status', filters.status)
+    const query = params.toString()
+    return request<Pagamento[]>(`/api/pagamentos${query ? `?${query}` : ''}`)
+  },
+  registrarPagamento: (input: RegistrarPagamentoInput) =>
+    request<Pagamento>('/api/pagamentos', jsonInit('POST', input)),
+  confirmarPagamento: (id: number, input: ConfirmarPagamentoInput) =>
+    request<Pagamento>(`/api/pagamentos/${id}/confirmar`, jsonInit('PATCH', input)),
 
   listarMidias: (status?: StatusMidia, assinaturaId?: number) => {
     const params = new URLSearchParams()

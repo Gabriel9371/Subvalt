@@ -17,4 +17,5 @@ public class ResumoAssinaturasResponseDTO {
     private BigDecimal gastoAnualEstimado;
     private int quantidadeAtivas;
     private int quantidadeVencendoEm7Dias;
+    private ResumoFinanceiroDTO financeiro;
 }

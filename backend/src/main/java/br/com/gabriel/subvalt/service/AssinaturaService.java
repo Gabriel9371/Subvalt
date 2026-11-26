@@ -27,6 +27,7 @@ public class AssinaturaService {
     private final AssinaturaRepository assinaturaRepository;
     private final AssinaturaMapper assinaturaMapper;
     private final ImageStorageService imageStorageService;
+    private final PagamentoAssinaturaService pagamentoService;
 
     // Todo método roda dentro de uma transação, e a conversão para DTO acontece aqui dentro.
     // Com open-in-view=false, é só nesse intervalo que os relacionamentos lazy podem ser lidos.
@@ -34,7 +35,9 @@ public class AssinaturaService {
     @Transactional
     public AssinaturaResponseDTO criar(AssinaturaRequestDTO dto) {
         Assinatura assinatura = assinaturaMapper.toEntity(dto);
-        return assinaturaMapper.toResponse(assinaturaRepository.save(assinatura));
+        Assinatura salva = assinaturaRepository.save(assinatura);
+        pagamentoService.gerarPrevisoes(salva);
+        return assinaturaMapper.toResponse(salva);
     }
 
     @Transactional(readOnly = true)
@@ -53,6 +56,7 @@ public class AssinaturaService {
     public AssinaturaResponseDTO atualizar(Long id, AssinaturaRequestDTO dto) {
         Assinatura assinatura = buscarEntidade(id);
         assinaturaMapper.atualizarEntidade(assinatura, dto);
+        pagamentoService.reconciliarPrevisoes(assinatura);
         // Sem save(): a entidade já está gerenciada, então o Hibernate
         // detecta a mudança e grava o UPDATE sozinho ao final da transação
         return assinaturaMapper.toResponse(assinatura);
@@ -61,8 +65,10 @@ public class AssinaturaService {
     @Transactional
     public void excluir(Long id) {
         Assinatura assinatura = buscarEntidade(id);
+        pagamentoService.cancelarPrevisoesFuturas(assinatura);
         imageStorageService.removerAposCommit(ImageCategory.ASSINATURA, assinatura.getImagemKey());
         assinatura.desvincularMidias();
+        assinatura.desvincularPagamentos();
         assinaturaRepository.delete(assinatura);
     }
 
@@ -94,7 +100,9 @@ public class AssinaturaService {
     @Transactional
     public AssinaturaResponseDTO renovar(Long id) {
         Assinatura assinatura = buscarEntidade(id);
+        LocalDate vencimentoAnterior = assinatura.getProximoVencimento();
         assinatura.renovar();
+        pagamentoService.manterPrevisoesAposRenovacao(assinatura, vencimentoAnterior);
         return assinaturaMapper.toResponse(assinatura);
     }
 
@@ -102,6 +110,7 @@ public class AssinaturaService {
     public AssinaturaResponseDTO cancelar(Long id) {
         Assinatura assinatura = buscarEntidade(id);
         assinatura.setAtiva(false);
+        pagamentoService.cancelarPrevisoesFuturas(assinatura);
         return assinaturaMapper.toResponse(assinatura);
     }
 
@@ -109,11 +118,12 @@ public class AssinaturaService {
     public AssinaturaResponseDTO reativar(Long id) {
         Assinatura assinatura = buscarEntidade(id);
         assinatura.setAtiva(true);
+        pagamentoService.gerarPrevisoes(assinatura);
         return assinaturaMapper.toResponse(assinatura);
     }
 
     /** Totais do painel: só as assinaturas ativas entram na conta. */
-    @Transactional(readOnly = true)
+    @Transactional
     public ResumoAssinaturasResponseDTO resumo() {
         List<Assinatura> ativas = assinaturaRepository.findByAtivaTrue();
 
@@ -132,6 +142,7 @@ public class AssinaturaService {
                 .gastoAnualEstimado(mensal.multiply(BigDecimal.valueOf(12)))
                 .quantidadeAtivas(ativas.size())
                 .quantidadeVencendoEm7Dias(vencendo)
+                .financeiro(pagamentoService.resumoFinanceiro())
                 .build();
     }
 
