@@ -1,0 +1,89 @@
+import type {
+  Assinatura,
+  AssinaturaInput,
+  Midia,
+  MidiaInput,
+  ResumoAssinaturas,
+  StatusMidia,
+} from './types'
+
+const API_URL = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') || 'http://localhost:8080'
+
+export class ApiError extends Error {
+  status: number
+  campos: Record<string, string> | null
+
+  constructor(status: number, mensagem: string, campos: Record<string, string> | null = null) {
+    super(mensagem)
+    this.status = status
+    this.campos = campos
+  }
+}
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(`${API_URL}${path}`, {
+    ...init,
+    headers: {
+      'Content-Type': 'application/json',
+      ...init?.headers,
+    },
+  })
+
+  if (!response.ok) {
+    let mensagem = 'Não foi possível concluir a operação.'
+    let campos: Record<string, string> | null = null
+    try {
+      const body = await response.json() as { mensagem?: string; campos?: Record<string, string> }
+      mensagem = body.mensagem || mensagem
+      campos = body.campos || null
+    } catch {
+      if (response.status === 500) mensagem = 'O servidor encontrou um erro inesperado.'
+    }
+    throw new ApiError(response.status, mensagem, campos)
+  }
+
+  if (response.status === 204) return undefined as T
+  return response.json() as Promise<T>
+}
+
+const jsonInit = (method: string, body?: unknown): RequestInit => ({
+  method,
+  ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+})
+
+export const api = {
+  resumo: () => request<ResumoAssinaturas>('/api/assinaturas/resumo'),
+  vencimentos: (dias = 7) => request<Assinatura[]>(`/api/assinaturas/vencimentos?dias=${dias}`),
+  semUso: () => request<Assinatura[]>('/api/assinaturas/sem-uso'),
+  listarAssinaturas: () => request<Assinatura[]>('/api/assinaturas'),
+  criarAssinatura: (input: AssinaturaInput) =>
+    request<Assinatura>('/api/assinaturas', jsonInit('POST', input)),
+  atualizarAssinatura: (id: number, input: AssinaturaInput) =>
+    request<Assinatura>(`/api/assinaturas/${id}`, jsonInit('PUT', input)),
+  excluirAssinatura: (id: number) =>
+    request<void>(`/api/assinaturas/${id}`, jsonInit('DELETE')),
+  renovarAssinatura: (id: number) =>
+    request<Assinatura>(`/api/assinaturas/${id}/renovar`, jsonInit('PATCH')),
+  cancelarAssinatura: (id: number) =>
+    request<Assinatura>(`/api/assinaturas/${id}/cancelar`, jsonInit('PATCH')),
+  reativarAssinatura: (id: number) =>
+    request<Assinatura>(`/api/assinaturas/${id}/reativar`, jsonInit('PATCH')),
+
+  listarMidias: (status?: StatusMidia, assinaturaId?: number) => {
+    const params = new URLSearchParams()
+    if (status) params.set('status', status)
+    if (assinaturaId) params.set('assinaturaId', String(assinaturaId))
+    const query = params.toString()
+    return request<Midia[]>(`/api/midias${query ? `?${query}` : ''}`)
+  },
+  criarMidia: (input: MidiaInput) =>
+    request<Midia>('/api/midias', jsonInit('POST', input)),
+  atualizarMidia: (id: number, input: MidiaInput) =>
+    request<Midia>(`/api/midias/${id}`, jsonInit('PUT', input)),
+  excluirMidia: (id: number) =>
+    request<void>(`/api/midias/${id}`, jsonInit('DELETE')),
+  assistirEpisodio: (id: number) =>
+    request<Midia>(`/api/midias/${id}/episodio`, jsonInit('PATCH')),
+  registrarHoras: (id: number, quantidade: number) =>
+    request<Midia>(`/api/midias/${id}/horas?quantidade=${quantidade}`, jsonInit('PATCH')),
+}
