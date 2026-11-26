@@ -11,6 +11,7 @@ export interface Assinatura {
   ciclo: CicloCobranca
   proximoVencimento: string
   ativa: boolean
+  imagemUrl: string | null
   custoMensal: number
   diasParaVencer: number
   vencida: boolean
@@ -41,6 +42,7 @@ export interface Midia {
   titulo: string
   status: StatusMidia
   nota: number | null
+  imagemUrl: string | null
   descricaoProgresso: string
   assinaturaId: number | null
   assinaturaNome: string | null

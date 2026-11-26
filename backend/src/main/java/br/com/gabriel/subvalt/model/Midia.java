@@ -43,6 +43,9 @@ public abstract class Midia {
 
     private Double nota;
 
+    @Column(name = "imagem_key", length = 80)
+    private String imagemKey;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "assinatura_id")
     private Assinatura assinatura;

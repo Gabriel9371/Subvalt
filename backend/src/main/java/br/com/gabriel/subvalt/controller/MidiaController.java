@@ -7,6 +7,10 @@ import br.com.gabriel.subvalt.service.MidiaService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.CacheControl;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -62,6 +66,28 @@ public class MidiaController {
     public ResponseEntity<Void> excluir(@PathVariable Long id) {
         midiaService.excluir(id);
         return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping(value = "/{id}/imagem", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<MidiaResponseDTO> atualizarImagem(
+            @PathVariable Long id, @RequestParam(value = "arquivo", required = false) MultipartFile arquivo) {
+        return ResponseEntity.ok(midiaService.atualizarImagem(id, arquivo));
+    }
+
+    @DeleteMapping("/{id}/imagem")
+    public ResponseEntity<MidiaResponseDTO> removerImagem(@PathVariable Long id) {
+        return ResponseEntity.ok(midiaService.removerImagem(id));
+    }
+
+    @GetMapping("/{id}/imagem")
+    public ResponseEntity<byte[]> buscarImagem(@PathVariable Long id) {
+        var imagem = midiaService.buscarImagem(id);
+        return ResponseEntity.ok()
+                .contentType(imagem.tipoConteudo())
+                .cacheControl(CacheControl.noStore())
+                .header(HttpHeaders.CONTENT_DISPOSITION, "inline")
+                .header("X-Content-Type-Options", "nosniff")
+                .body(imagem.conteudo());
     }
 
     // ---------- Ações ----------

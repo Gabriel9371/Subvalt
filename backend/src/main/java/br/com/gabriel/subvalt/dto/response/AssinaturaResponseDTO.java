@@ -23,6 +23,7 @@ public class AssinaturaResponseDTO {
     private CicloCobranca ciclo;
     private LocalDate proximoVencimento;
     private boolean ativa;
+    private String imagemUrl;
 
     // Calculados pela regra de negócio da entidade (nada disso é gravado no banco)
     private BigDecimal custoMensal;

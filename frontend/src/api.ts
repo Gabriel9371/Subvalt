@@ -9,6 +9,10 @@ import type {
 
 const API_URL = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') || 'http://localhost:8080'
 
+export function imageSrc(path: string) {
+  return `${API_URL}${path}`
+}
+
 export class ApiError extends Error {
   status: number
   campos: Record<string, string> | null
@@ -21,10 +25,11 @@ export class ApiError extends Error {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const isMultipart = init?.body instanceof FormData
   const response = await fetch(`${API_URL}${path}`, {
     ...init,
     headers: {
-      'Content-Type': 'application/json',
+      ...(!isMultipart ? { 'Content-Type': 'application/json' } : {}),
       ...init?.headers,
     },
   })
@@ -51,6 +56,12 @@ const jsonInit = (method: string, body?: unknown): RequestInit => ({
   ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
 })
 
+const imageInit = (file: File): RequestInit => {
+  const body = new FormData()
+  body.append('arquivo', file)
+  return { method: 'POST', body }
+}
+
 export const api = {
   resumo: () => request<ResumoAssinaturas>('/api/assinaturas/resumo'),
   vencimentos: (dias = 7) => request<Assinatura[]>(`/api/assinaturas/vencimentos?dias=${dias}`),
@@ -62,6 +73,10 @@ export const api = {
     request<Assinatura>(`/api/assinaturas/${id}`, jsonInit('PUT', input)),
   excluirAssinatura: (id: number) =>
     request<void>(`/api/assinaturas/${id}`, jsonInit('DELETE')),
+  enviarImagemAssinatura: (id: number, file: File) =>
+    request<Assinatura>(`/api/assinaturas/${id}/imagem`, imageInit(file)),
+  removerImagemAssinatura: (id: number) =>
+    request<Assinatura>(`/api/assinaturas/${id}/imagem`, jsonInit('DELETE')),
   renovarAssinatura: (id: number) =>
     request<Assinatura>(`/api/assinaturas/${id}/renovar`, jsonInit('PATCH')),
   cancelarAssinatura: (id: number) =>
@@ -82,6 +97,10 @@ export const api = {
     request<Midia>(`/api/midias/${id}`, jsonInit('PUT', input)),
   excluirMidia: (id: number) =>
     request<void>(`/api/midias/${id}`, jsonInit('DELETE')),
+  enviarImagemMidia: (id: number, file: File) =>
+    request<Midia>(`/api/midias/${id}/imagem`, imageInit(file)),
+  removerImagemMidia: (id: number) =>
+    request<Midia>(`/api/midias/${id}/imagem`, jsonInit('DELETE')),
   assistirEpisodio: (id: number) =>
     request<Midia>(`/api/midias/${id}/episodio`, jsonInit('PATCH')),
   registrarHoras: (id: number, quantidade: number) =>

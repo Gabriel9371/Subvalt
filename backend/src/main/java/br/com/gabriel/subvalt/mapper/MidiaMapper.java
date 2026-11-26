@@ -66,6 +66,9 @@ public class MidiaMapper {
                 .titulo(entidade.getTitulo())
                 .status(entidade.getStatus())
                 .nota(entidade.getNota())
+                .imagemUrl(entidade.getImagemKey() == null
+                        ? null
+                        : "/api/midias/" + entidade.getId() + "/imagem?v=" + entidade.getImagemKey())
                 .descricaoProgresso(entidade.descricaoProgresso());
 
         Assinatura assinatura = entidade.getAssinatura();

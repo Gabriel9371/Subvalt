@@ -8,6 +8,7 @@ import br.com.gabriel.subvalt.mapper.AssinaturaMapper;
 import br.com.gabriel.subvalt.model.Assinatura;
 import br.com.gabriel.subvalt.model.enums.StatusMidia;
 import br.com.gabriel.subvalt.repository.AssinaturaRepository;
+import org.springframework.web.multipart.MultipartFile;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,6 +26,7 @@ public class AssinaturaService {
 
     private final AssinaturaRepository assinaturaRepository;
     private final AssinaturaMapper assinaturaMapper;
+    private final ImageStorageService imageStorageService;
 
     // Todo método roda dentro de uma transação, e a conversão para DTO acontece aqui dentro.
     // Com open-in-view=false, é só nesse intervalo que os relacionamentos lazy podem ser lidos.
@@ -59,8 +61,34 @@ public class AssinaturaService {
     @Transactional
     public void excluir(Long id) {
         Assinatura assinatura = buscarEntidade(id);
+        imageStorageService.removerAposCommit(ImageCategory.ASSINATURA, assinatura.getImagemKey());
         assinatura.desvincularMidias();
         assinaturaRepository.delete(assinatura);
+    }
+
+    @Transactional
+    public AssinaturaResponseDTO atualizarImagem(Long id, MultipartFile arquivo) {
+        Assinatura assinatura = buscarEntidade(id);
+        assinatura.setImagemKey(imageStorageService.substituir(
+                arquivo, ImageCategory.ASSINATURA, assinatura.getImagemKey()));
+        return assinaturaMapper.toResponse(assinatura);
+    }
+
+    @Transactional
+    public AssinaturaResponseDTO removerImagem(Long id) {
+        Assinatura assinatura = buscarEntidade(id);
+        imageStorageService.removerAposCommit(ImageCategory.ASSINATURA, assinatura.getImagemKey());
+        assinatura.setImagemKey(null);
+        return assinaturaMapper.toResponse(assinatura);
+    }
+
+    @Transactional(readOnly = true)
+    public ImageStorageService.ArquivoImagem buscarImagem(Long id) {
+        Assinatura assinatura = buscarEntidade(id);
+        if (assinatura.getImagemKey() == null) {
+            throw new RecursoNaoEncontradoException("Imagem não encontrada para a assinatura: " + id);
+        }
+        return imageStorageService.carregar(ImageCategory.ASSINATURA, assinatura.getImagemKey());
     }
 
     @Transactional

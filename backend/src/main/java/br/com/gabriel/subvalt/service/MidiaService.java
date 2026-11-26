@@ -14,6 +14,7 @@ import br.com.gabriel.subvalt.repository.MidiaRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -24,6 +25,7 @@ public class MidiaService {
     private final MidiaRepository midiaRepository;
     private final AssinaturaRepository assinaturaRepository;
     private final MidiaMapper midiaMapper;
+    private final ImageStorageService imageStorageService;
 
     @Transactional
     public MidiaResponseDTO criar(MidiaRequestDTO dto) {
@@ -68,7 +70,34 @@ public class MidiaService {
 
     @Transactional
     public void excluir(Long id) {
-        midiaRepository.delete(buscarEntidade(id));
+        Midia midia = buscarEntidade(id);
+        imageStorageService.removerAposCommit(ImageCategory.MIDIA, midia.getImagemKey());
+        midiaRepository.delete(midia);
+    }
+
+    @Transactional
+    public MidiaResponseDTO atualizarImagem(Long id, MultipartFile arquivo) {
+        Midia midia = buscarEntidade(id);
+        midia.setImagemKey(imageStorageService.substituir(
+                arquivo, ImageCategory.MIDIA, midia.getImagemKey()));
+        return midiaMapper.toResponse(midia);
+    }
+
+    @Transactional
+    public MidiaResponseDTO removerImagem(Long id) {
+        Midia midia = buscarEntidade(id);
+        imageStorageService.removerAposCommit(ImageCategory.MIDIA, midia.getImagemKey());
+        midia.setImagemKey(null);
+        return midiaMapper.toResponse(midia);
+    }
+
+    @Transactional(readOnly = true)
+    public ImageStorageService.ArquivoImagem buscarImagem(Long id) {
+        Midia midia = buscarEntidade(id);
+        if (midia.getImagemKey() == null) {
+            throw new RecursoNaoEncontradoException("Imagem não encontrada para a mídia: " + id);
+        }
+        return imageStorageService.carregar(ImageCategory.MIDIA, midia.getImagemKey());
     }
 
     /** Soma um episódio ao anime. A própria entidade ajusta o status. */

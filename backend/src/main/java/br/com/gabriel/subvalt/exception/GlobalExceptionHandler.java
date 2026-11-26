@@ -1,6 +1,7 @@
 package br.com.gabriel.subvalt.exception;
 
 import br.com.gabriel.subvalt.dto.response.ErroResponseDTO;
+import br.com.gabriel.subvalt.service.ImageStorageService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -8,6 +9,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
@@ -56,6 +58,22 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErroResponseDTO> tratarParametroInvalido(MethodArgumentTypeMismatchException ex) {
         return montar(HttpStatus.BAD_REQUEST,
                 "Valor inválido para o parâmetro '" + ex.getName() + "'.", null);
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ErroResponseDTO> tratarArquivoGrande(MaxUploadSizeExceededException ex) {
+        return montar(HttpStatus.PAYLOAD_TOO_LARGE, "A imagem deve ter no máximo 5 MB.", null);
+    }
+
+    @ExceptionHandler(ImageStorageService.ImageTooLargeException.class)
+    public ResponseEntity<ErroResponseDTO> tratarImagemGrande(
+            ImageStorageService.ImageTooLargeException ex) {
+        return montar(HttpStatus.PAYLOAD_TOO_LARGE, ex.getMessage(), null);
+    }
+
+    @ExceptionHandler(ImageStorageException.class)
+    public ResponseEntity<ErroResponseDTO> tratarFalhaDeArmazenamento(ImageStorageException ex) {
+        return montar(HttpStatus.INTERNAL_SERVER_ERROR, "Não foi possível processar a imagem.", null);
     }
 
     private ResponseEntity<ErroResponseDTO> montar(HttpStatus status, String mensagem, Map<String, String> campos) {
