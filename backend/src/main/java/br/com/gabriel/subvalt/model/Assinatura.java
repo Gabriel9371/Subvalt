@@ -58,6 +58,9 @@ public abstract class Assinatura {
     @Column(nullable = false)
     private boolean ativa = true;
 
+    @Column(name = "imagem_key", length = 80)
+    private String imagemKey;
+
     @OneToMany(mappedBy = "assinatura")
     private List<Midia> midias = new ArrayList<>();
 

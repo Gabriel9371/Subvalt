@@ -18,6 +18,7 @@ public class MidiaResponseDTO {
     private String titulo;
     private StatusMidia status;
     private Double nota;
+    private String imagemUrl;
 
     // Texto montado pela própria entidade, por exemplo "12/24 episódios" ou "35h jogadas"
     private String descricaoProgresso;

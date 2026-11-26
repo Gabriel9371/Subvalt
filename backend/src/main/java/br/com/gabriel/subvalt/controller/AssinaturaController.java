@@ -7,6 +7,10 @@ import br.com.gabriel.subvalt.service.AssinaturaService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.CacheControl;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -59,6 +63,28 @@ public class AssinaturaController {
     public ResponseEntity<Void> excluir(@PathVariable Long id) {
         assinaturaService.excluir(id);
         return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping(value = "/{id}/imagem", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<AssinaturaResponseDTO> atualizarImagem(
+            @PathVariable Long id, @RequestParam(value = "arquivo", required = false) MultipartFile arquivo) {
+        return ResponseEntity.ok(assinaturaService.atualizarImagem(id, arquivo));
+    }
+
+    @DeleteMapping("/{id}/imagem")
+    public ResponseEntity<AssinaturaResponseDTO> removerImagem(@PathVariable Long id) {
+        return ResponseEntity.ok(assinaturaService.removerImagem(id));
+    }
+
+    @GetMapping("/{id}/imagem")
+    public ResponseEntity<byte[]> buscarImagem(@PathVariable Long id) {
+        var imagem = assinaturaService.buscarImagem(id);
+        return ResponseEntity.ok()
+                .contentType(imagem.tipoConteudo())
+                .cacheControl(CacheControl.noStore())
+                .header(HttpHeaders.CONTENT_DISPOSITION, "inline")
+                .header("X-Content-Type-Options", "nosniff")
+                .body(imagem.conteudo());
     }
 
     // ---------- Ações ----------

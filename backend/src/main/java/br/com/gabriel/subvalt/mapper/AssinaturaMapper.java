@@ -60,6 +60,9 @@ public class AssinaturaMapper {
                 .ciclo(entidade.getCiclo())
                 .proximoVencimento(entidade.getProximoVencimento())
                 .ativa(entidade.isAtiva())
+                .imagemUrl(entidade.getImagemKey() == null
+                        ? null
+                        : "/api/assinaturas/" + entidade.getId() + "/imagem?v=" + entidade.getImagemKey())
                 .custoMensal(entidade.custoMensal())
                 .diasParaVencer(entidade.diasParaVencer())
                 .vencida(entidade.estaVencida());

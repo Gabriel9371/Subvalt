@@ -1,6 +1,8 @@
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import './App.css'
 import { ApiError, api } from './api'
+import { EntityArtwork } from './EntityArtwork'
+import { ImagePicker } from './ImagePicker'
 import { cicloLabels, statusMidiaLabels, tipoAssinaturaLabels, tipoMidiaLabels } from './labels'
 import type {
   Assinatura,
@@ -222,9 +224,12 @@ function Overview() {
             <div className="due-list">
               {vencimentos.map((assinatura) => (
                 <article className="due-row" key={assinatura.id}>
-                  <span className={`type-glyph ${assinatura.tipo.toLowerCase()}`}>
-                    {assinatura.tipo === 'STREAMING' ? 'S' : 'W'}
-                  </span>
+                  <EntityArtwork
+                    className={`type-glyph ${assinatura.tipo.toLowerCase()}`}
+                    imageUrl={assinatura.imagemUrl}
+                    alt={`Logo de ${assinatura.nome}`}
+                    fallback={assinatura.tipo === 'STREAMING' ? 'S' : 'W'}
+                  />
                   <div className="due-main">
                     <strong>{assinatura.nome}</strong>
                     <span>{tipoAssinaturaLabels[assinatura.tipo]} · {cicloLabels[assinatura.ciclo]}</span>
@@ -253,7 +258,12 @@ function Overview() {
             <div className="unused-list">
               {semUso.map((assinatura) => (
                 <article className="unused-row" key={assinatura.id}>
-                  <span className="indicator blue" />
+                  <EntityArtwork
+                    className="unused-artwork"
+                    imageUrl={assinatura.imagemUrl}
+                    alt={`Logo de ${assinatura.nome}`}
+                    fallback={assinatura.tipo === 'STREAMING' ? 'S' : 'W'}
+                  />
                   <div>
                     <strong>{assinatura.nome}</strong>
                     <span>{tipoAssinaturaLabels[assinatura.tipo]}</span>
@@ -367,9 +377,12 @@ function Subscriptions() {
           <section className="subscription-list">
             {visibleItems.map((item) => (
               <article className="subscription-card" key={item.id}>
-                <div className={`subscription-symbol ${item.tipo.toLowerCase()}`}>
-                  {item.tipo === 'STREAMING' ? 'S' : 'W'}
-                </div>
+                <EntityArtwork
+                  className={`subscription-symbol ${item.tipo.toLowerCase()}`}
+                  imageUrl={item.imagemUrl}
+                  alt={`Logo de ${item.nome}`}
+                  fallback={item.tipo === 'STREAMING' ? 'S' : 'W'}
+                />
                 <div className="subscription-main">
                   <div className="title-line">
                     <h2>{item.nome}</h2>
@@ -418,7 +431,7 @@ function Subscriptions() {
         <SubscriptionForm
           assinatura={form === 'new' ? null : form}
           onClose={() => setForm(null)}
-          onSaved={() => { setForm(null); setToast(form === 'new' ? 'Assinatura cadastrada.' : 'Assinatura atualizada.'); reload() }}
+          onSaved={(feedback) => { setForm(null); setToast(feedback || (form === 'new' ? 'Assinatura cadastrada.' : 'Assinatura atualizada.')); reload() }}
         />
       )}
       {confirm && (
@@ -443,7 +456,7 @@ function MediaForm({ midia, assinaturas, onClose, onSaved }: {
   midia: Midia | null
   assinaturas: Assinatura[]
   onClose: () => void
-  onSaved: () => void
+  onSaved: (feedback?: string) => void
 }) {
   const [tipo, setTipo] = useState<TipoMidia>(midia?.tipo || 'ANIME')
   const [titulo, setTitulo] = useState(midia?.titulo || '')
@@ -453,12 +466,17 @@ function MediaForm({ midia, assinaturas, onClose, onSaved }: {
   const [episodios, setEpisodios] = useState(midia?.episodiosAssistidos != null ? String(midia.episodiosAssistidos) : '')
   const [total, setTotal] = useState(midia?.totalEpisodios != null ? String(midia.totalEpisodios) : '')
   const [horas, setHoras] = useState(midia?.horasJogadas != null ? String(midia.horasJogadas) : '')
+  const [imageFile, setImageFile] = useState<File | null>(null)
+  const [removeImage, setRemoveImage] = useState(false)
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const submitLock = useRef(false)
 
   const submit = async (event: FormEvent) => {
     event.preventDefault()
+    if (submitLock.current) return
+    submitLock.current = true
     setBusy(true)
     setError('')
     setFieldErrors({})
@@ -473,8 +491,24 @@ function MediaForm({ midia, assinaturas, onClose, onSaved }: {
         : { horasJogadas: horas === '' ? 0 : Number(horas) }),
     }
     try {
-      if (midia) await api.atualizarMidia(midia.id, input)
-      else await api.criarMidia(input)
+      const saved = midia
+        ? await api.atualizarMidia(midia.id, input)
+        : await api.criarMidia(input)
+      if (imageFile) {
+        try {
+          await api.enviarImagemMidia(saved.id, imageFile)
+        } catch (imageError) {
+          onSaved(`Mídia salva, mas a imagem não foi enviada: ${imageError instanceof Error ? imageError.message : 'tente novamente ao editar a mídia.'}`)
+          return
+        }
+      } else if (removeImage && midia?.imagemUrl) {
+        try {
+          await api.removerImagemMidia(saved.id)
+        } catch (imageError) {
+          onSaved(`Mídia salva, mas a imagem não foi removida: ${imageError instanceof Error ? imageError.message : 'tente novamente ao editar a mídia.'}`)
+          return
+        }
+      }
       onSaved()
     } catch (err) {
       if (err instanceof ApiError) {
@@ -482,6 +516,7 @@ function MediaForm({ midia, assinaturas, onClose, onSaved }: {
         setFieldErrors(err.campos || {})
       } else setError(err instanceof Error ? err.message : 'Não foi possível salvar.')
     } finally {
+      submitLock.current = false
       setBusy(false)
     }
   }
@@ -502,6 +537,16 @@ function MediaForm({ midia, assinaturas, onClose, onSaved }: {
           <input id="midia-titulo" value={titulo} maxLength={150} onChange={(event) => setTitulo(event.target.value)} placeholder="Nome da mídia" />
           {fieldErrors.titulo && <small className="field-error">{fieldErrors.titulo}</small>}
         </div>
+        <ImagePicker
+          currentImageUrl={midia?.imagemUrl || null}
+          alt={`Pré-visualização da capa de ${titulo || 'mídia'}`}
+          kind="media"
+          file={imageFile}
+          onFileChange={setImageFile}
+          removalRequested={removeImage}
+          onRemovalRequestedChange={setRemoveImage}
+          disabled={busy}
+        />
         <div className="form-grid">
           <div className="field">
             <label htmlFor="midia-status">Status</label>
@@ -548,7 +593,9 @@ function MediaForm({ midia, assinaturas, onClose, onSaved }: {
         )}
         <div className="modal-actions">
           <button type="button" className="button secondary" onClick={onClose}>Cancelar</button>
-          <button type="submit" className="button primary" disabled={busy}>{busy ? 'Salvando…' : midia ? 'Salvar alterações' : 'Cadastrar'}</button>
+          <button type="submit" className="button primary" disabled={busy}>
+            {busy ? imageFile || removeImage ? 'Salvando imagem…' : 'Salvando…' : midia ? 'Salvar alterações' : 'Cadastrar'}
+          </button>
         </div>
       </form>
     </Modal>
@@ -646,7 +693,11 @@ function Toast({ message }: { message: string }) {
 
 export default App
 
-function SubscriptionForm({ assinatura, onClose, onSaved }: { assinatura: Assinatura | null; onClose: () => void; onSaved: () => void }) {
+function SubscriptionForm({ assinatura, onClose, onSaved }: {
+  assinatura: Assinatura | null
+  onClose: () => void
+  onSaved: (feedback?: string) => void
+}) {
   const [tipo, setTipo] = useState<TipoAssinatura>(assinatura?.tipo || 'STREAMING')
   const [nome, setNome] = useState(assinatura?.nome || '')
   const [valor, setValor] = useState(assinatura ? String(assinatura.valor) : '')
@@ -654,12 +705,17 @@ function SubscriptionForm({ assinatura, onClose, onSaved }: { assinatura: Assina
   const [vencimento, setVencimento] = useState(assinatura?.proximoVencimento || '')
   const [pessoas, setPessoas] = useState(assinatura?.pessoasNoPlano ? String(assinatura.pessoasNoPlano) : '')
   const [desconto, setDesconto] = useState(assinatura?.percentualDesconto != null ? String(assinatura.percentualDesconto) : '')
+  const [imageFile, setImageFile] = useState<File | null>(null)
+  const [removeImage, setRemoveImage] = useState(false)
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const submitLock = useRef(false)
 
   const submit = async (event: FormEvent) => {
     event.preventDefault()
+    if (submitLock.current) return
+    submitLock.current = true
     setBusy(true)
     setError('')
     setFieldErrors({})
@@ -672,8 +728,24 @@ function SubscriptionForm({ assinatura, onClose, onSaved }: { assinatura: Assina
       ...(tipo === 'STREAMING' ? { pessoasNoPlano: Number(pessoas) } : { percentualDesconto: Number(desconto) }),
     }
     try {
-      if (assinatura) await api.atualizarAssinatura(assinatura.id, input)
-      else await api.criarAssinatura(input)
+      const saved = assinatura
+        ? await api.atualizarAssinatura(assinatura.id, input)
+        : await api.criarAssinatura(input)
+      if (imageFile) {
+        try {
+          await api.enviarImagemAssinatura(saved.id, imageFile)
+        } catch (imageError) {
+          onSaved(`Assinatura salva, mas a imagem não foi enviada: ${imageError instanceof Error ? imageError.message : 'tente novamente ao editar a assinatura.'}`)
+          return
+        }
+      } else if (removeImage && assinatura?.imagemUrl) {
+        try {
+          await api.removerImagemAssinatura(saved.id)
+        } catch (imageError) {
+          onSaved(`Assinatura salva, mas a imagem não foi removida: ${imageError instanceof Error ? imageError.message : 'tente novamente ao editar a assinatura.'}`)
+          return
+        }
+      }
       onSaved()
     } catch (err) {
       if (err instanceof ApiError) {
@@ -681,6 +753,7 @@ function SubscriptionForm({ assinatura, onClose, onSaved }: { assinatura: Assina
         setFieldErrors(err.campos || {})
       } else setError(err instanceof Error ? err.message : 'Não foi possível salvar.')
     } finally {
+      submitLock.current = false
       setBusy(false)
     }
   }
@@ -701,6 +774,16 @@ function SubscriptionForm({ assinatura, onClose, onSaved }: { assinatura: Assina
           <input id="assinatura-nome" value={nome} maxLength={100} onChange={(event) => setNome(event.target.value)} placeholder="Ex.: Netflix" />
           {fieldErrors.nome && <small className="field-error">{fieldErrors.nome}</small>}
         </div>
+        <ImagePicker
+          currentImageUrl={assinatura?.imagemUrl || null}
+          alt={`Pré-visualização do logo de ${nome || 'assinatura'}`}
+          kind="subscription"
+          file={imageFile}
+          onFileChange={setImageFile}
+          removalRequested={removeImage}
+          onRemovalRequestedChange={setRemoveImage}
+          disabled={busy}
+        />
         <div className="form-grid">
           <div className="field">
             <label htmlFor="assinatura-valor">Valor cobrado</label>
@@ -736,7 +819,9 @@ function SubscriptionForm({ assinatura, onClose, onSaved }: { assinatura: Assina
         )}
         <div className="modal-actions">
           <button type="button" className="button secondary" onClick={onClose}>Cancelar</button>
-          <button type="submit" className="button primary" disabled={busy}>{busy ? 'Salvando…' : assinatura ? 'Salvar alterações' : 'Cadastrar'}</button>
+          <button type="submit" className="button primary" disabled={busy}>
+            {busy ? imageFile || removeImage ? 'Salvando imagem…' : 'Salvando…' : assinatura ? 'Salvar alterações' : 'Cadastrar'}
+          </button>
         </div>
       </form>
     </Modal>
@@ -869,44 +954,52 @@ function Library() {
           <section className="media-grid" aria-label="Lista da biblioteca">
             {visibleItems.map((midia) => (
               <article className={`media-card ${midia.tipo.toLowerCase()}`} key={midia.id}>
-                <div className="media-head">
-                  <span className="media-kind">{midia.tipo === 'ANIME' ? 'AN' : 'JG'}</span>
-                  <div className="media-actions">
-                    <button type="button" className="icon-button" title="Editar" aria-label={`Editar ${midia.titulo}`} onClick={() => setForm(midia)}>✎</button>
-                    <button type="button" className="icon-button danger" title="Excluir" aria-label={`Excluir ${midia.titulo}`} onClick={() => setConfirm(midia)}>⌫</button>
-                  </div>
-                </div>
-                <div className="media-title">
-                  <span className={`status-dot-label ${midia.status.toLowerCase()}`} />
-                  <div>
-                    <p>{tipoMidiaLabels[midia.tipo]}</p>
-                    <h2>{midia.titulo}</h2>
-                  </div>
-                </div>
-                <div className="media-progress">
-                  <span className="mono">{midia.descricaoProgresso}</span>
-                  {midia.tipo === 'ANIME' && midia.totalEpisodios != null && (
-                    <div className="progress-track">
-                      <span style={{ width: `${Math.min(100, ((midia.episodiosAssistidos || 0) / midia.totalEpisodios) * 100)}%` }} />
+                <EntityArtwork
+                  className="media-cover"
+                  imageUrl={midia.imagemUrl}
+                  alt={`Capa de ${midia.titulo}`}
+                  fallback={midia.tipo === 'ANIME' ? 'AN' : 'JG'}
+                />
+                <div className="media-content">
+                  <div className="media-head">
+                    <span className="media-kind">{midia.tipo === 'ANIME' ? 'AN' : 'JG'}</span>
+                    <div className="media-actions">
+                      <button type="button" className="icon-button" title="Editar" aria-label={`Editar ${midia.titulo}`} onClick={() => setForm(midia)}>✎</button>
+                      <button type="button" className="icon-button danger" title="Excluir" aria-label={`Excluir ${midia.titulo}`} onClick={() => setConfirm(midia)}>⌫</button>
                     </div>
-                  )}
-                  {midia.tipo === 'JOGO' && <div className="game-meter" aria-hidden="true"><i /><i /><i /><i /><i /></div>}
-                </div>
-                <div className="media-footer">
-                  <span className={`media-status ${midia.status.toLowerCase().replaceAll('_', '-')}`}>{statusMidiaLabels[midia.status]}</span>
-                  {midia.nota != null && <span className="media-note">nota <b>{midia.nota}</b></span>}
-                </div>
-                <div className="media-association">
-                  <span>{midia.assinaturaNome || 'Sem assinatura'}</span>
-                  {midia.tipo === 'ANIME' && (
-                    <button type="button" className="text-button" disabled={busyId === midia.id || midia.status === 'CONCLUIDO'}
-                      onClick={() => assistirEpisodio(midia)}>
-                      {midia.status === 'CONCLUIDO' ? 'Concluído' : '+ Episódio'}
-                    </button>
-                  )}
-                  {midia.tipo === 'JOGO' && (
-                    <button type="button" className="text-button" disabled={busyId === midia.id} onClick={() => setHoursTarget(midia)}>+ Horas</button>
-                  )}
+                  </div>
+                  <div className="media-title">
+                    <span className={`status-dot-label ${midia.status.toLowerCase()}`} />
+                    <div>
+                      <p>{tipoMidiaLabels[midia.tipo]}</p>
+                      <h2>{midia.titulo}</h2>
+                    </div>
+                  </div>
+                  <div className="media-progress">
+                    <span className="mono">{midia.descricaoProgresso}</span>
+                    {midia.tipo === 'ANIME' && midia.totalEpisodios != null && (
+                      <div className="progress-track">
+                        <span style={{ width: `${Math.min(100, ((midia.episodiosAssistidos || 0) / midia.totalEpisodios) * 100)}%` }} />
+                      </div>
+                    )}
+                    {midia.tipo === 'JOGO' && <div className="game-meter" aria-hidden="true"><i /><i /><i /><i /><i /></div>}
+                  </div>
+                  <div className="media-footer">
+                    <span className={`media-status ${midia.status.toLowerCase().replaceAll('_', '-')}`}>{statusMidiaLabels[midia.status]}</span>
+                    {midia.nota != null && <span className="media-note">nota <b>{midia.nota}</b></span>}
+                  </div>
+                  <div className="media-association">
+                    <span>{midia.assinaturaNome || 'Sem assinatura'}</span>
+                    {midia.tipo === 'ANIME' && (
+                      <button type="button" className="text-button" disabled={busyId === midia.id || midia.status === 'CONCLUIDO'}
+                        onClick={() => assistirEpisodio(midia)}>
+                        {midia.status === 'CONCLUIDO' ? 'Concluído' : '+ Episódio'}
+                      </button>
+                    )}
+                    {midia.tipo === 'JOGO' && (
+                      <button type="button" className="text-button" disabled={busyId === midia.id} onClick={() => setHoursTarget(midia)}>+ Horas</button>
+                    )}
+                  </div>
                 </div>
               </article>
             ))}
@@ -919,7 +1012,7 @@ function Library() {
           midia={form === 'new' ? null : form}
           assinaturas={assinaturas}
           onClose={() => setForm(null)}
-          onSaved={() => { setForm(null); setToast(form === 'new' ? 'Mídia cadastrada.' : 'Mídia atualizada.'); reload() }}
+          onSaved={(feedback) => { setForm(null); setToast(feedback || (form === 'new' ? 'Mídia cadastrada.' : 'Mídia atualizada.')); reload() }}
         />
       )}
       {confirm && (
