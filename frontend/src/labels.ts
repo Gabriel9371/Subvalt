@@ -1,4 +1,4 @@
-import type { CicloCobranca, StatusMidia, TipoAssinatura, TipoMidia } from './types'
+import type { CicloCobranca, StatusMidia, StatusPagamento, TipoAssinatura, TipoMidia } from './types'
 
 export const tipoAssinaturaLabels: Record<TipoAssinatura, string> = {
   STREAMING: 'Streaming',
@@ -21,4 +21,10 @@ export const statusMidiaLabels: Record<StatusMidia, string> = {
   EM_ANDAMENTO: 'Em andamento',
   CONCLUIDO: 'Concluído',
   ABANDONADO: 'Abandonado',
+}
+
+export const statusPagamentoLabels: Record<StatusPagamento, string> = {
+  PENDENTE: 'Pendente',
+  PAGO: 'Pago',
+  ATRASADO: 'Atrasado',
 }

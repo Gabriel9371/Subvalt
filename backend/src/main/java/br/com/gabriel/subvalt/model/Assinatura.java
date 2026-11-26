@@ -64,6 +64,9 @@ public abstract class Assinatura {
     @OneToMany(mappedBy = "assinatura")
     private List<Midia> midias = new ArrayList<>();
 
+    @OneToMany(mappedBy = "assinatura")
+    private List<PagamentoAssinatura> pagamentos = new ArrayList<>();
+
     // O construtor passa pelos setters, então toda regra de validação
     // vale na criação e também nas atualizações
     protected Assinatura(String nome, BigDecimal valor, CicloCobranca ciclo, LocalDate proximoVencimento) {
@@ -116,5 +119,12 @@ public abstract class Assinatura {
             midia.setAssinatura(null);
         }
         midias.clear();
+    }
+
+    public void desvincularPagamentos() {
+        for (PagamentoAssinatura pagamento : pagamentos) {
+            pagamento.setAssinatura(null);
+        }
+        pagamentos.clear();
     }
 }
